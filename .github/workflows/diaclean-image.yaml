@@ -1,0 +1,63 @@
+name: DiaClean image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - diaclean/**
+      - .github/workflows/diaclean-image.yaml
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      piler_version:
+        description: Upstream sutoj/piler tag
+        default: "1.4.9"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/diacleanshop/piler
+  PILER_VERSION: ${{ inputs.piler_version || '1.4.9' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Date
+        id: date
+        run: echo "today=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ env.PILER_VERSION }}-diaclean
+            type=raw,value=${{ env.PILER_VERSION }}-diaclean.${{ steps.date.outputs.today }}
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=piler (DiaClean build)
+            org.opencontainers.image.version=${{ env.PILER_VERSION }}-diaclean.${{ steps.date.outputs.today }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: diaclean
+          build-args: PILER_VERSION=${{ env.PILER_VERSION }}
+          platforms: linux/amd64
+          pull: true
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
